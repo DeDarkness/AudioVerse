@@ -192,7 +192,10 @@ $('#backup-file').addEventListener('change',run(async event=>{
     await refresh();
     if (player.book) {
       const updated = books.find(b=>b.id===player.book.id);
-      player.book = {...updated}; player.seek(updated.position); player.book.finished = updated.finished; player.setMetadata(); await player.save(); renderPlayer();
+      player.book = {...updated};
+      if (player.pendingPosition !== null) player.pendingPosition = updated.position;
+      else player.seek(updated.position);
+      player.book.finished = updated.finished; player.setMetadata(); await player.save(); render();
     }
     toast(`${count} áudio(s) restaurado(s).${count === 0 ? ' Importe primeiro os mesmos arquivos de áudio.' : ''}`);
   } finally { event.target.value = ''; }

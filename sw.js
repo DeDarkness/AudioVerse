@@ -1,4 +1,4 @@
-const CACHE = 'audioverse-shell-1.0.0';
+const CACHE = 'audioverse-shell-1.0.0-2';
 const FILES = ['./','./index.html','./styles.css','./app.js','./db.js','./player.js','./utils.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./icons/maskable-512.png','./icons/apple-touch-icon.png'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))); });
 self.addEventListener('activate', event => {

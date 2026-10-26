@@ -11,3 +11,6 @@ artifacts/
 *.flac
 *.aac
 *.zip
+AudioVerse-progresso-*.json
+backups/
+media/
