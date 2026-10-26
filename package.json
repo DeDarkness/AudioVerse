@@ -1,0 +1,16 @@
+{
+  "name": "audioverse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sua biblioteca de áudio pessoal, offline e sem login.",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node --check app.js && node --check player.js && node --check db.js && node --check sw.js && node --check utils.js",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "playwright test",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": { "@playwright/test": "^1.56.1", "fake-indexeddb": "^6.2.4" },
+  "engines": { "node": ">=22" }
+}
