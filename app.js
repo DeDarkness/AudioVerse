@@ -143,7 +143,7 @@ function renderDrive(){
   $('#drive-disconnect').hidden=!drive.connected;
   $('#google-client-id').value=drive.clientId;
 }
-async function listen(book,allowConnect=true){
+async function listen(book,allowConnect=true,prepareOnly=false){
   if(preparingCloud)throw Error('Aguarde o preparo do áudio atual.');
   if(book.driveId&&!book.offline){
     if(!drive.connected){if(!allowConnect)throw Error('Conecte o Google Drive para preparar a próxima parte.');await drive.connect();}
@@ -152,15 +152,16 @@ async function listen(book,allowConnect=true){
       $('#import-status').textContent='Preparando áudio do Drive · '+book.title;
       await cacheDriveAudio(book,await drive.media(book.driveId),ratio=>{$('#import-status').textContent=`Preparando no aparelho · ${Math.round(ratio*100)}% · ${book.title}`;});
       await refresh();book=books.find(b=>b.id===book.id);
-    }finally{preparingCloud=false;$('#import-status').hidden=true;}
+    }finally{preparingCloud=false;$('#import-status').hidden=true;renderDrive();}
   }
-  await player.select(book,true);
+  if(!prepareOnly)await player.select(book,true);
+  return book;
 }
 $('#drive-connect').addEventListener('click',run(async()=>{
   await cloudReady;
   if(!drive.configured){switchView('settings');$('#google-setup').open=true;$('#google-client-id').focus();toast('A conexão privada precisa do identificador Google do AudioVerse.');return;}
   await drive.connect();renderDrive();$('#drive-connect').disabled=true;
-  try{const files=await drive.catalog();const added=await addDriveBooks(files);await refresh();toast(`${files.length} áudio(s) no acervo do Drive. ${added} novo(s).`);}finally{$('#drive-connect').disabled=false;renderDrive();}
+  try{const files=await drive.catalog(({files})=>{$('#drive-status').textContent=`Carregando acervo · ${files} áudio(s) encontrado(s)`;});const added=await addDriveBooks(files);await refresh();toast(`${files.length} áudio(s) no acervo do Drive. ${added} novo(s).`);}finally{$('#drive-connect').disabled=false;renderDrive();}
 }));
 $('#drive-disconnect').addEventListener('click',()=>{drive.disconnect();renderDrive();toast('Conta desconectada neste aparelho. Seus áudios offline e seu progresso foram mantidos.');});
 $('#save-google-client').addEventListener('click',run(async()=>{
@@ -197,7 +198,7 @@ document.addEventListener('click',run(async event => {
   }
   if (b.hasAttribute('data-close')) b.closest('dialog').close();
   if (b.dataset.delete) { deleteId = b.dataset.delete; $('#confirm-dialog p').textContent=books.find(x=>x.id===deleteId)?.driveId?'A entrada do catálogo, a cópia offline, o progresso e os marcadores serão removidos deste navegador. O original no Drive será mantido.':'O arquivo, o progresso e os marcadores serão removidos deste navegador.';$('#confirm-dialog').showModal(); }
-  if (b.dataset.download) { let book = books.find(x=>x.id===b.dataset.download); if(book.driveId&&!book.offline){await listen(book);book=books.find(x=>x.id===book.id);} const blob = await getAudio(book.id); if (blob) download(blob,book.filename); else throw new Error('Arquivo não encontrado.'); }
+  if (b.dataset.download) { let book = books.find(x=>x.id===b.dataset.download); if(book.driveId&&!book.offline)book=await listen(book,true,true); const blob = await getAudio(book.id); if (blob) download(blob,book.filename); else throw new Error('Arquivo não encontrado.'); }
   if(b.dataset.releaseCache){
     const id=b.dataset.releaseCache;if(player.book?.id===id)await player.clear();
     await removeDriveCache(id);await refresh();openDetails(id);toast('Cópia offline removida. O áudio continua no Drive e seu progresso foi mantido.');

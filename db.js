@@ -95,15 +95,18 @@ export const patchBook = (id, patch) => transaction(['books'],'readwrite',(tx,do
 export const deleteBook = id => transaction(['books','audio'],'readwrite', tx => { tx.objectStore('books').delete(id); const audio=tx.objectStore('audio'); audio.delete(id); audio.delete(`pending:${id}`); audio.delete(chunkRange(id)); });
 export async function addDriveBooks(files) {
   return transaction(['books'],'readwrite',(tx,done)=>{
-    const store=tx.objectStore('books');let added=0;done(0);
+    const store=tx.objectStore('books'),seen=new Set();let added=0;done(0);
     for(const file of files){
       if(!/^[\w-]+$/.test(file.id)||!file.name?.toLowerCase().endsWith('.mp3')||!Number.isSafeInteger(Number(file.size))||Number(file.size)<=0)continue;
+      if(seen.has(file.id))continue;seen.add(file.id);
       const id='drive:'+file.id,r=store.get(id);
       r.onsuccess=()=>{
         const current=r.result;
         // A changed cloud file must not silently replace an offline copy with a different length.
         if(current){store.put({...current,...(!current.offline?{filename:file.name,bytes:Number(file.size)}:{}),driveModifiedTime:file.modifiedTime});return;}
-        store.add({id,fingerprint:id,driveId:file.id,driveModifiedTime:file.modifiedTime,...filenameMetadata(file.name),filename:file.name,bytes:Number(file.size),type:'audio/mpeg',offline:false,addedAt:Date.now(),position:0,duration:0,favorite:false,finished:false,bookmarks:[]});done(++added);
+        const metadata=filenameMetadata(file.name);
+        if(metadata.seriesKey&&/^[\w-]+$/.test(file.parents?.[0]||''))metadata.seriesKey='drive:'+file.parents[0]+':'+metadata.seriesKey;
+        store.add({id,fingerprint:id,driveId:file.id,driveModifiedTime:file.modifiedTime,...metadata,filename:file.name,bytes:Number(file.size),type:'audio/mpeg',offline:false,addedAt:Date.now(),position:0,duration:0,favorite:false,finished:false,bookmarks:[]});done(++added);
       };
     }
   });
@@ -129,7 +132,7 @@ export async function cacheDriveAudio(book,response,onProgress=()=>{}) {
     if(used){const data=buffer.buffer.slice(0,used);await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`${book.id}:${index++}`,buffer:data}));}
     await transaction(['audio','books'],'readwrite',tx=>{
       const store=tx.objectStore('audio');store.put({id:book.id,type:'audio/mpeg',chunkCount:index});store.delete(`pending:${book.id}`);
-      const request=tx.objectStore('books').get(book.id);request.onsuccess=()=>{if(request.result)tx.objectStore('books').put({...request.result,offline:true});};
+      const request=tx.objectStore('books').get(book.id);request.onsuccess=()=>{if(!request.result){tx.abort();return;}tx.objectStore('books').put({...request.result,offline:true});};
     });
   }catch(error){await reader.cancel().catch(()=>{});await removeAudio(book.id).catch(()=>{});throw error;}
   finally{reader.releaseLock();}

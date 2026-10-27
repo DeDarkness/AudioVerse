@@ -16,5 +16,6 @@ backups/
 media/
 private/
 *.pdf
+*.epub
 *.aac
 *.m4b

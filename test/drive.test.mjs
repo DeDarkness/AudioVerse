@@ -23,7 +23,7 @@ test('falha de autorização limpa a sessão e permite reconectar sem expor cred
 test('download interrompido é removido; conclusão atravessa blocos, preserva posição e pode ser liberada',async()=>{
   const bytes=new Uint8Array(4*1024*1024+777).map((_,i)=>i%251);
   const file={id:'cloud_test',name:'Autor - Livro - Parte 01 de 02.mp3',size:String(bytes.byteLength),modifiedTime:'2026-01-01'};
-  assert.equal(await addDriveBooks([file]),1);let book=(await listBooks())[0];
+  assert.equal(await addDriveBooks([file,file]),1);let book=(await listBooks())[0];
   await patchBook(book.id,{position:120,bookmarks:[{id:'m',position:30,label:'Trecho'}],readStatus:'read'});
   assert.equal(await addDriveBooks([file]),0);book=(await listBooks())[0];assert.equal(book.position,120);assert.equal(book.readStatus,'read');
   const broken=new ReadableStream({start(c){c.enqueue(bytes.subarray(0,1000));c.close();}});
@@ -37,4 +37,27 @@ test('download interrompido é removido; conclusão atravessa blocos, preserva p
   await removeDriveCache(book.id);assert.equal(await getAudio(book.id),undefined);book=(await listBooks())[0];assert.equal(book.offline,false);assert.equal(book.position,120);
   const db=await openDB();const pending=await new Promise(resolve=>{const tx=db.transaction('audio');const r=tx.objectStore('audio').getAll();r.onsuccess=()=>resolve(r.result);});assert.equal(pending.length,0);
   await deleteBook(book.id);
+  await assert.rejects(()=>cacheDriveAudio(book,new Response(bytes)));
+  assert.equal(await getAudio(book.id),undefined);
+});
+
+test('acervos grandes agrupam consultas de pastas e removem resultados repetidos',async()=>{
+  let calls=0;
+  const drive=new DriveLibrary({fetcher:async url=>{
+    calls++;assert.ok(url.length<8000);const q=new URL(url).searchParams.get('q');
+    if(q.includes('name ='))return Response.json({files:[{id:'big_root'}]});
+    if(q.includes("'big_root'"))return Response.json({files:Array.from({length:100},(_,i)=>({id:'folder_'+i,mimeType:'application/vnd.google-apps.folder'}))});
+    const ids=[...q.matchAll(/'(folder_\d+)' in parents/g)].map(m=>m[1]);
+    const files=ids.map(id=>({id:'audio_'+id,name:id+'.mp3',size:'100',parents:[id]}));
+    return Response.json({files:[...files,files[0]]});
+  }});drive.token='fixture';drive.expiresAt=Date.now()+60000;
+  assert.equal((await drive.catalog()).length,100);assert.equal(calls,6);
+});
+
+test('partes de edições diferentes permanecem no livro correto do Drive',async()=>{
+  const files=['one','two'].flatMap(parent=>[1,2].map(part=>({id:parent+'_'+part,name:`Autor - Mesmo título - Parte 0${part} de 02.mp3`,size:'100',parents:[parent]})));
+  await addDriveBooks(files);const books=await listBooks();
+  const a=books.find(b=>b.driveId==='one_1'),b=books.find(b=>b.driveId==='one_2'),c=books.find(b=>b.driveId==='two_1');
+  assert.equal(a.seriesKey,b.seriesKey);assert.notEqual(a.seriesKey,c.seriesKey);
+  for(const book of books)await deleteBook(book.id);
 });

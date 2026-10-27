@@ -48,7 +48,7 @@ export class DriveLibrary {
   async files(q){
     let pageToken='',result=[];const visited=new Set();
     do{
-      const params={q:'trashed = false and ('+q+')',fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,capabilities(canDownload))',pageSize:'1000'};
+      const params={q:'trashed = false and ('+q+')',fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,capabilities(canDownload))',pageSize:'1000'};
       if(pageToken)params.pageToken=pageToken;
       const data=await(await this.request('files',params)).json();
       result.push(...(data.files||[]));pageToken=data.nextPageToken||'';
@@ -57,20 +57,22 @@ export class DriveLibrary {
     }while(pageToken);
     return result;
   }
-  async catalog(){
+  async catalog(onProgress=()=>{}){
     const escaped=this.folderName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const roots=await this.files("mimeType = 'application/vnd.google-apps.folder' and name = '"+escaped+"'");
     if(!roots.length)throw Error('A pasta de MP3 compactados não apareceu nesta conta Google.');
-    const queue=roots.map(x=>x.id),visited=new Set(),audio=[];
+    const queue=roots.map(x=>x.id),visited=new Set(),audio=new Map();
     while(queue.length){
-      const id=queue.shift();if(visited.has(id))continue;visited.add(id);
-      if(!/^[\w-]+$/.test(id))throw Error('Identificador de pasta inválido.');
-      for(const item of await this.files("'"+id+"' in parents")){
+      const parents=[];
+      while(queue.length&&parents.length<25){const id=queue.shift();if(visited.has(id))continue;if(!/^[\w-]+$/.test(id))throw Error('Identificador de pasta inválido.');visited.add(id);parents.push(id);}
+      if(!parents.length)continue;
+      for(const item of await this.files(parents.map(id=>"'"+id+"' in parents").join(' or '))){
         if(item.mimeType==='application/vnd.google-apps.folder')queue.push(item.id);
-        else if(item.name?.toLowerCase().endsWith('.mp3')&&item.capabilities?.canDownload!==false)audio.push(item);
+        else if(item.name?.toLowerCase().endsWith('.mp3')&&item.capabilities?.canDownload!==false)audio.set(item.id,item);
       }
+      onProgress({folders:visited.size,files:audio.size});
     }
-    return audio;
+    return [...audio.values()];
   }
   media(id){if(!/^[\w-]+$/.test(id))throw Error('Identificador de áudio inválido.');return this.request('files/'+id,{alt:'media'});}
 }

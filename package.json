@@ -1,6 +1,6 @@
 {
   "name": "audioverse",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "description": "Sua biblioteca de áudio pessoal, offline e sem login.",

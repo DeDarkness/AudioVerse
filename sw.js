@@ -1,4 +1,4 @@
-const CACHE = 'audioverse-shell-1.2.0';
+const CACHE = 'audioverse-shell-1.2.1';
 const FILES = ['./','./index.html','./styles.css','./app.js','./db.js','./player.js','./utils.js','./drive.js','./cloud-config.json','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./icons/maskable-512.png','./icons/apple-touch-icon.png'];
 let mediaDB;
 function database() {
