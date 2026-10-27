@@ -98,7 +98,9 @@ test('comandos Media Session controlam o mesmo áudio ao trocar de tela',async({
   await page.evaluate(()=>window.mediaHandlers.pause());await expect(page.locator('#play')).toHaveAttribute('aria-label','Reproduzir');
   await page.evaluate(()=>window.mediaHandlers.seekto({seekTime:22}));
   await expect.poll(()=>page.locator('#native-audio').evaluate(a=>a.currentTime)).toBeGreaterThan(21);
-  await page.evaluate(()=>window.mediaHandlers.play());await expect(page.locator('#play')).toHaveAttribute('aria-label','Pausar');
+  // A real remote-media action carries user activation; page.evaluate alone does not.
+  await page.evaluate(()=>{const button=document.createElement('button');button.id='test-media-session-play';button.textContent='Simular comando de mídia';button.style.cssText='position:fixed;top:8px;left:8px;z-index:9999';button.onclick=()=>window.mediaHandlers.play();document.body.append(button);});
+  await page.locator('#test-media-session-play').click();await expect(page.locator('#play')).toHaveAttribute('aria-label','Pausar');
   await expect(page.locator('audio')).toHaveCount(1);
 });
 test('importação em blocos preserva todos os bytes, inclusive offline',async({page,context})=>{
