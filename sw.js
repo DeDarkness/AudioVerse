@@ -1,4 +1,4 @@
-const CACHE = 'audioverse-shell-1.1.0';
+const CACHE = 'audioverse-shell-1.1.0-2';
 const FILES = ['./','./index.html','./styles.css','./app.js','./db.js','./player.js','./utils.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./icons/maskable-512.png','./icons/apple-touch-icon.png'];
 let mediaDB;
 function database() {
@@ -36,7 +36,7 @@ async function localAudio(request,id) {
     status=206;
   }
   const mime={mp3:'audio/mpeg',m4a:'audio/mp4',m4b:'audio/mp4',aac:'audio/aac',wav:'audio/wav',ogg:'audio/ogg',flac:'audio/flac'};
-  const type=book.type||mime[book.filename.split('.').pop().toLowerCase()]||'application/octet-stream';
+  const type=mime[book.filename.split('.').pop().toLowerCase()]||(book.type?.startsWith('audio/') ? book.type : 'application/octet-stream');
   const headers={'Content-Type':type,'Content-Length':String(end-start+1),'Accept-Ranges':'bytes','Cache-Control':'private, no-store'};
   if(status===206)headers['Content-Range']=`bytes ${start}-${end}/${total}`;
   if(request.method==='HEAD')return new Response(null,{status,headers});
