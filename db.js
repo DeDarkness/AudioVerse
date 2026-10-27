@@ -1,4 +1,4 @@
-import { fingerprint, validAudio, clamp } from './utils.js';
+import { fingerprint, validAudio, clamp, filenameMetadata } from './utils.js';
 let connection;
 export function openDB() {
   if (connection) return connection;
@@ -61,13 +61,13 @@ export async function cleanupAbandonedImports() {
   // A fresh import can be running in another tab; only reclaim abandoned work after 24 hours.
   for (const item of pending) if (Date.now()-item.createdAt > 24*3600000) await removeAudio(item.bookId);
 }
-export async function addBook(file) {
+export async function addBook(file,onProgress=()=>{}) {
   if (!validAudio(file) || !file.size) throw new Error('Escolha um arquivo de áudio válido e com conteúdo.');
   const existing = await transaction(['books'],'readonly',(tx,done)=>{
     const r=tx.objectStore('books').index('fingerprint').get(fingerprint(file)); r.onsuccess=()=>done(r.result);
   });
   if (existing) return {book:existing,duplicate:true};
-  const book = {id:crypto.randomUUID(), fingerprint:fingerprint(file), title:file.name.replace(/\.[^.]+$/, '').replace(/[_]+/g,' '), author:'Áudio pessoal', filename:file.name, bytes:file.size, type:file.type || '', addedAt:Date.now(), position:0, duration:0, favorite:false, finished:false, bookmarks:[]};
+  const book = {id:crypto.randomUUID(), fingerprint:fingerprint(file), ...filenameMetadata(file.name), filename:file.name, bytes:file.size, type:file.type || '', addedAt:Date.now(), position:0, duration:0, favorite:false, finished:false, bookmarks:[]};
   const chunkSize = 4*1024*1024, chunkCount = Math.ceil(file.size/chunkSize);
   try {
     await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`pending:${book.id}`,bookId:book.id,createdAt:Date.now()}));
@@ -76,6 +76,7 @@ export async function addBook(file) {
       // without reading a whole multi-hour audiobook into memory during import.
       const buffer=await file.slice(index*chunkSize,(index+1)*chunkSize).arrayBuffer();
       await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`${book.id}:${index}`,buffer}));
+      onProgress((index+1)/chunkCount);
     }
     // Only a fully stored file becomes visible in the library.
     return await transaction(['books','audio'],'readwrite',(tx,done)=>{
@@ -106,7 +107,7 @@ export async function restoreProgress(data) {
       const c = cursor.result;
       if (!c) { done(count); return; }
       const b = c.value, saved = incoming.get(b.fingerprint);
-      if (saved) { c.update({...b, title:typeof saved.title === 'string' ? saved.title.slice(0,300) : b.title, author:typeof saved.author === 'string' ? saved.author.slice(0,200) : b.author, position:clamp(saved.position,0,b.duration || Number.MAX_SAFE_INTEGER), favorite:!!saved.favorite, finished:!!saved.finished, bookmarks:saved.bookmarks.slice(0,1000).map(m => ({id:m.id,position:clamp(m.position,0,b.duration || Number.MAX_SAFE_INTEGER),label:m.label.slice(0,200)}))}); count++; }
+      if (saved) { c.update({...b, title:typeof saved.title === 'string' ? saved.title.slice(0,300) : b.title, author:typeof saved.author === 'string' ? saved.author.slice(0,200) : b.author, position:clamp(saved.position,0,b.duration || Number.MAX_SAFE_INTEGER), favorite:!!saved.favorite, finished:!!saved.finished, readStatus:['read','unread'].includes(saved.readStatus) ? saved.readStatus : null, bookmarks:saved.bookmarks.slice(0,1000).map(m => ({id:m.id,position:clamp(m.position,0,b.duration || Number.MAX_SAFE_INTEGER),label:m.label.slice(0,200)}))}); count++; }
       c.continue();
     };
   });

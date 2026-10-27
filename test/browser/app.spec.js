@@ -115,4 +115,41 @@ test('importação em blocos preserva todos os bytes, inclusive offline',async({
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
   await page.reload();await context.setOffline(true);await page.reload();
   expect(await digest()).toBe(expected);
+  const ranges = await page.evaluate(async()=>{
+    const {listBooks}=await import('/db.js'),[book]=await listBooks();
+    const url=`./_audio/${book.id}`;
+    const range=await fetch(url,{headers:{Range:'bytes=4194300-4194310'}});
+    const suffix=await fetch(url,{headers:{Range:'bytes=-17'}});
+    const invalid=await fetch(url,{headers:{Range:'bytes=99999999-'}});
+    const head=await fetch(url,{method:'HEAD'});
+    const full=await fetch(url);
+    return {status:range.status,bytes:Array.from(new Uint8Array(await range.arrayBuffer())),suffix:(await suffix.arrayBuffer()).byteLength,invalid:invalid.status,length:head.headers.get('Content-Length'),hash:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await full.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('')};
+  });
+  expect(ranges).toEqual({status:206,bytes:Array(11).fill(0x5a),suffix:17,invalid:416,length:String(buffer.length),hash:expected});
+});
+test('marcar lido e não lido preserva a posição após reabrir',async({page})=>{
+  await page.goto('/');await importAudio(page);
+  await page.evaluate(async()=>{const db=await import('/db.js');const [b]=await db.listBooks();await db.patchBook(b.id,{position:22,duration:45,finished:false});});
+  await page.reload();
+  await page.locator('.book-card .read-toggle').click();
+  await page.locator('[data-filter="finished"]').click();
+  await expect(page.locator('.book-card')).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('.book-card .read-toggle')).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(async()=>{const db=await import('/db.js');const [b]=await db.listBooks();return{position:b.position,finished:b.finished,readStatus:b.readStatus};})).toEqual({position:22,finished:false,readStatus:'read'});
+  await page.locator('.book-card .read-toggle').click();
+  await page.locator('[data-filter="unread"]').click();await expect(page.locator('.book-card')).toHaveCount(1);
+  await page.locator('[data-filter="finished"]').click();await expect(page.locator('.book-card')).toHaveCount(0);
+});
+test('audiolivro dividido continua na próxima parte e mantém a sequência',async({page,browserName})=>{
+  needsAudio(browserName);
+  await page.goto('/');
+  await page.locator('#files').setInputFiles([1,2].map(n=>({name:`Autor - Livro - Parte 0${n} de 02.wav`,mimeType:'audio/wav',buffer:wave()})));
+  await expect(page.locator('.book-card')).toHaveCount(2);
+  await expect(page.locator('.book-card .title-button').first()).toContainText('Parte 01');
+  await page.locator('.book-card .cover-button').first().click();
+  await expect(page.locator('#duration')).toHaveText('0:45');
+  await page.locator('#seek').fill('44');await page.locator('#seek').dispatchEvent('change');
+  await expect(page.locator('#player-title')).toContainText('Parte 02',{timeout:10000});
+  await expect(page.locator('#play')).toHaveAttribute('aria-label','Pausar');
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { time, filterBooks, escapeHTML, progress } from '../utils.js';
+import { time, filterBooks, escapeHTML, progress, filenameMetadata, isRead } from '../utils.js';
 import { addBook, listBooks, getAudio, patchBook, deleteBook, restoreProgress } from '../db.js';
 
 test('horas longas e conteúdo HTML são apresentados com segurança',()=>{
@@ -15,6 +15,14 @@ test('filtros combinam busca, favoritos e status',()=>{
   assert.equal(filterBooks(books,{query:'hobbes',favorites:true,filter:'progress'}).length,1);
   assert.equal(filterBooks(books,{filter:'finished'})[0].title,'Outro');
   assert.equal(filterBooks(books,{query:'inexistente'}).length,0);
+});
+test('partes de um audiolivro mantêm a ordem e a leitura independe da posição',()=>{
+  const first={id:'a',...filenameMetadata('Autor - Livro - Parte 01 de 02.mp3'),addedAt:1,position:30,finished:false,readStatus:'read'};
+  const second={id:'b',...filenameMetadata('Autor - Livro - Parte 02 de 02.mp3'),addedAt:3,position:0,finished:false};
+  assert.equal(first.author,'Autor');assert.equal(first.partIndex,1);
+  assert.deepEqual(filterBooks([second,first]).map(x=>x.id),['a','b']);
+  assert.equal(isRead(first),true);assert.equal(first.position,30);
+  assert.equal(filterBooks([first,second],{filter:'unread'})[0].id,'b');
 });
 test('biblioteca preserva áudio, evita duplicatas e restaura progresso atomicamente',async()=>{
   const file=new File(['audio-fixture'],'teste.mp3',{type:'audio/mpeg',lastModified:10});

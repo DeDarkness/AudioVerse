@@ -1,6 +1,6 @@
 import { listBooks, addBook, patchBook, deleteBook, getAudio, restoreProgress, cleanupAbandonedImports } from './db.js';
 import { AudioPlayer } from './player.js';
-import { time, size, escapeHTML as e, progress, filterBooks } from './utils.js';
+import { time, size, escapeHTML as e, progress, filterBooks, isRead } from './utils.js';
 
 const $ = selector => document.querySelector(selector);
 const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -47,6 +47,14 @@ function renderLibrary() {
   }
   list.className = 'book-grid';
   list.innerHTML = visible.map(book => `<article class="book-card" data-book="${e(book.id)}"><button class="cover-button" data-listen="${e(book.id)}" aria-label="Ouvir ${e(book.title)}">${cover(book)}<span class="cover-play">${icon('play')}</span></button><div class="book-meta"><div><h3><button class="title-button" data-details="${e(book.id)}">${e(book.title)}</button></h3><p>${e(book.author)}</p></div><button class="icon-button favorite ${book.favorite ? 'selected' : ''}" data-favorite="${e(book.id)}" aria-label="${book.favorite ? 'Remover dos' : 'Adicionar aos'} favoritos: ${e(book.title)}" aria-pressed="${book.favorite}">${icon('heart')}</button></div><div class="book-progress"><span style="width:${progress(book)}%"></span></div><div class="book-bottom"><span>${book.finished ? 'Concluído' : book.position > 0 ? `${Math.round(progress(book))}% ouvido` : 'Ainda não ouvido'}</span><span>${book.duration ? time(book.duration) : size(book.bytes)}</span></div><span class="offline-badge">${icon('check')} No aparelho</span></article>`).join('');
+  for (const card of list.querySelectorAll('[data-book]')) {
+    const book = books.find(b=>b.id===card.dataset.book);
+    card.querySelector('.book-bottom > span').outerHTML = readButton(book);
+  }
+}
+function readButton(book) {
+  const read = isRead(book);
+  return `<button class="read-toggle ${read ? 'selected' : ''}" data-read="${e(book.id)}" aria-pressed="${read}" aria-label="Marcar como ${read ? 'não lido' : 'lido'}: ${e(book.title)}">${read ? '✓ Lido' : 'Não lido'}</button>`;
 }
 function renderPlayer() {
   const book = player.book;
@@ -88,6 +96,7 @@ function openDetails(id) {
   if (!book) return;
   const current = player.book?.id === id ? player.book : book;
   $('#details-content').innerHTML = `<div class="dialog-heading"><span class="eyebrow">SEU ÁUDIO</span><button class="icon-button" data-close aria-label="Fechar">${icon('close')}</button></div><div class="details-intro">${cover(book)}<div><h2>${e(book.title)}</h2><p>${e(book.filename)}</p><span class="local-pill">${size(book.bytes)} · NO APARELHO</span></div></div><form id="edit-book" data-id="${e(id)}"><label>Título<input name="title" required maxlength="300" value="${e(book.title)}"></label><label>Autor / descrição<input name="author" required maxlength="200" value="${e(book.author)}"></label><button class="secondary" type="submit">Salvar informações</button></form><div class="details-actions"><button class="primary" data-listen="${e(id)}">${icon('play')}Ouvir áudio</button><button class="secondary" data-download="${e(id)}">${icon('download')}Salvar original</button></div><h3>Marcadores <span class="muted">${book.bookmarks.length}</span></h3><div class="bookmark-list">${book.bookmarks.length ? book.bookmarks.map(m => `<div class="bookmark-row"><button class="text-button" data-mark="${e(m.id)}" data-id="${e(id)}">${icon('bookmark')}<span>${e(m.label)}<small>${time(m.position)}</small></span></button><button class="icon-button" data-remove-mark="${e(m.id)}" data-id="${e(id)}" aria-label="Remover marcador ${e(m.label)}">${icon('close')}</button></div>`).join('') : '<p class="muted">Durante a reprodução, toque no ícone de marcador para guardar um trecho.</p>'}</div><div class="details-footer"><span>Posição salva: ${time(current.position)}</span><button class="text-button danger-text" data-delete="${e(id)}">Remover da biblioteca</button></div>`;
+  $('#details-content .details-actions').insertAdjacentHTML('beforeend',readButton(book));
   if (!$('#details').open) $('#details').showModal();
 }
 function download(blob, filename) {
@@ -103,7 +112,7 @@ async function importFiles(files) {
   try {
     for (let i=0;i<files.length;i++) {
       $('#import-status').textContent = `Salvando no aparelho · ${i+1}/${files.length} · ${files[i].name}`;
-      try { const result = await addBook(files[i]); if (result.duplicate) duplicates++; else added++; }
+      try { const result = await addBook(files[i],ratio=>{ $('#import-status').textContent=`Salvando no aparelho · ${i+1}/${files.length} · ${Math.round(ratio*100)}% · ${files[i].name}`; }); if (result.duplicate) duplicates++; else added++; }
       catch (error) { toast(`${files[i].name}: ${errorMessage(error)}`); }
     }
     await refresh();
@@ -127,6 +136,17 @@ document.addEventListener('click',run(async event => {
   if (b.dataset.favorite) {
     const book = books.find(x=>x.id===b.dataset.favorite);
     if (book) { await patchBook(book.id,{favorite:!book.favorite}); await refresh(); }
+  }
+  if (b.dataset.read) {
+    const book = books.find(x=>x.id===b.dataset.read);
+    if (book) {
+      const readStatus = isRead(book) ? 'unread' : 'read';
+      await patchBook(book.id,{readStatus});
+      if (player.book?.id === book.id) player.book.readStatus = readStatus;
+      const detailsOpen = $('#details').open;
+      await refresh(); if (detailsOpen) openDetails(book.id);
+      toast(readStatus === 'read' ? 'Marcado como lido. A posição foi mantida.' : 'Marcado como não lido. A posição foi mantida.');
+    }
   }
   if (b.hasAttribute('data-close')) b.closest('dialog').close();
   if (b.dataset.delete) { deleteId = b.dataset.delete; $('#confirm-dialog').showModal(); }
@@ -178,7 +198,7 @@ $('#confirm-delete').addEventListener('click',run(async()=>{
 }));
 $('#export-backup').addEventListener('click',run(async()=>{
   await player.save(); const all = await listBooks();
-  download(new Blob([JSON.stringify({format:'audioverse-progress',version:1,exportedAt:new Date().toISOString(),books:all.map(({fingerprint,title,author,position,favorite,finished,bookmarks})=>({fingerprint,title,author,position,favorite,finished,bookmarks}))},null,2)],{type:'application/json'}),`AudioVerse-progresso-${new Date().toISOString().slice(0,10)}.json`);
+  download(new Blob([JSON.stringify({format:'audioverse-progress',version:1,exportedAt:new Date().toISOString(),books:all.map(({fingerprint,title,author,position,favorite,finished,readStatus,bookmarks})=>({fingerprint,title,author,position,favorite,finished,readStatus,bookmarks}))},null,2)],{type:'application/json'}),`AudioVerse-progresso-${new Date().toISOString().slice(0,10)}.json`);
 }));
 $('#import-backup').addEventListener('click',()=>$('#backup-file').click());
 $('#backup-file').addEventListener('change',run(async event=>{
@@ -216,6 +236,12 @@ function connection() { $('#connection').innerHTML = `<span class="status-dot"><
 window.addEventListener('online',connection); window.addEventListener('offline',connection); connection();
 player.addEventListener('change',()=>{ renderPlayer(); if (player.book) { const i = books.findIndex(b=>b.id===player.book.id); if (i>=0) books[i] = {...books[i],position:player.book.position,duration:player.book.duration,finished:player.book.finished}; } renderHero(); renderLibrary(); });
 player.addEventListener('tick',tick);
+player.addEventListener('ended',run(async()=>{
+  const book=player.book;
+  if(!book?.seriesKey)return;
+  const next=books.find(b=>b.seriesKey===book.seriesKey && b.partIndex===book.partIndex+1);
+  if(next)await player.select(next,true);
+}));
 player.addEventListener('problem',event=>toast(event.detail));
 player.addEventListener('sleepended',()=>toast('Temporizador encerrado. Boa pausa.'));
 setInterval(()=>{ player.checkSleep(); tick(); },1000);

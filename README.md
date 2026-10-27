@@ -21,6 +21,8 @@ Seu espaço para ouvir. PWA pessoal em português, com visual escuro e verde ins
 - Play/pause, avanço e retrocesso de 15 segundos e busca por posição.
 - Velocidades de 0,75× a 2×, progresso salvo, favoritos e marcadores.
 - Título e autor editáveis; busca e filtros de andamento/conclusão.
+- Marcação manual de lido/não lido, independente da posição de reprodução, com filtros e backup.
+- Arquivos nomeados `Autor - Título - Parte 01 de 04.mp3` recebem autor, título e sequência automaticamente; ao terminar uma parte, o player tenta continuar na próxima parte já importada, usando o mesmo elemento de áudio.
 - Temporizador de 15, 30, 45 ou 60 minutos, baseado em horário absoluto.
 - Media Session com título, autor, capa, play/pause e comandos de posição.
 - Interface offline com service worker, ícones e manifesto instalável.
@@ -51,7 +53,7 @@ Se o iOS limitar esses comportamentos, um app nativo com sessão de áudio de pl
 
 ## Armazenamento e backup
 
-Áudio e metadados são separados no banco: listar a biblioteca não carrega todos os arquivos na memória. Apenas o áudio selecionado recebe uma URL de Blob, liberada ao trocar de livro. A importação grava blocos de 4 MiB como ArrayBuffers para compatibilidade entre navegadores e para não ler todo o livro de uma vez durante a importação. O livro só aparece depois de todos os blocos serem salvos e da confirmação final de metadados. Erros de cota removem a importação incompleta. Resíduos de importações interrompidas ao fechar o app são recuperados após 24 horas no próximo acesso.
+Áudio e metadados são separados no banco: listar a biblioteca não carrega todos os arquivos na memória. A importação grava blocos de 4 MiB como ArrayBuffers. Com o service worker ativo, a reprodução usa uma rota local com suporte a HTTP Range e lê esses blocos conforme o player solicita; nenhum arquivo ou trecho de áudio é enviado ao servidor. Esse caminho permite buscar posições distantes sem reconstruir o arquivo inteiro na memória. Sem service worker controlador, existe um fallback de Blob. O livro só aparece depois de todos os blocos serem salvos e da confirmação final de metadados. Erros de cota removem a importação incompleta. Resíduos de importações interrompidas ao fechar o app são removidos após 24 horas no próximo acesso.
 
 O navegador pode remover armazenamento local. O pedido de persistência pode ser negado, especialmente no iOS. Mantenha os arquivos originais. O backup JSON contém somente títulos, autores, posições, favoritos e marcadores. Para restaurar em outro aparelho, importe os mesmos arquivos e depois o JSON; a correspondência usa nome, tamanho e data de modificação. Arquivos alterados ou recriados podem não corresponder.
 
@@ -82,6 +84,12 @@ Ao alterar arquivos da interface, atualize a versão do cache em `sw.js` e a ver
 
 Os testes de navegador criam um WAV sintético de 45 segundos como fixture, verificam o estado real do elemento de mídia, persistência, interface móvel e abertura offline. Um segundo fixture atravessa o limite de blocos de 4 MiB e tem todos os bytes conferidos por SHA-256 antes e depois de reabrir offline. Isso não substitui teste com MP3 longo nem com o iOS real.
 
-Neste Windows, o WebKit do Playwright rejeitou o WAV original e o restaurado com `MEDIA_ERR_SRC_NOT_SUPPORTED`; por isso, três testes que exigem decodificação de áudio são explicitamente ignorados somente nessa combinação. Testes de armazenamento e interface continuam rodando no WebKit. No CI Linux, os testes de playback dos dois navegadores são executados. Os codecs disponíveis dependem do sistema; o [Playwright recomenda macOS para a maior proximidade com o Safari em testes de mídia](https://playwright.dev/docs/browsers#webkit).
+Neste Windows, o WebKit do Playwright rejeitou o WAV original e o restaurado com `MEDIA_ERR_SRC_NOT_SUPPORTED`; por isso, quatro testes que exigem decodificação de áudio são explicitamente ignorados somente nessa combinação. Testes de armazenamento e interface continuam rodando no WebKit. No CI Linux, os testes de playback dos dois navegadores são executados. Os codecs disponíveis dependem do sistema; o [Playwright recomenda macOS para a maior proximidade com o Safari em testes de mídia](https://playwright.dev/docs/browsers#webkit).
 
 Referências: [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API), [sessão de áudio no navegador](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/audioSession), [playback em apps nativos Apple](https://developer.apple.com/documentation/avfoundation/configuring-your-app-for-media-playback).
+
+## Conversão pessoal de PDFs no Windows
+
+Os scripts `scripts/prepare_audiobooks.py` e `scripts/synthesize_audiobook.ps1` permitem preparar narração local com uma voz portuguesa instalada no Windows e FFmpeg. `scripts/package_audiobooks.py` reúne blocos inteiros em volumes menores que 100 MiB para envio privado e importação no celular. A sequência de todos os blocos é conferida, sem cortar uma narração no meio para dividir o arquivo. Os PDFs, textos extraídos, configurações pessoais, relatórios e MP3s devem permanecer em `private/`, ignorado pelo Git e excluído do build publicado. O aplicativo web não acessa automaticamente o Google Drive: importe os MP3s pessoais pelo seletor de arquivos do aparelho.
+
+A preparação extrai todas as páginas, divide o texto sem truncar parágrafos e registra hashes dos blocos. Páginas com imagem e pouco texto bloqueiam a síntese até receberem OCR ou transcrição conferida. A síntese verifica cada bloco e decodifica o MP3 final por inteiro. Essa checagem confirma a integridade técnica; pronúncia, erros já presentes no OCR de origem e pequenos textos ilegíveis exigem revisão humana. Não publique obras protegidas ou documentos privados junto com o site.

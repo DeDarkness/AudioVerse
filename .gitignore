@@ -14,3 +14,7 @@ artifacts/
 AudioVerse-progresso-*.json
 backups/
 media/
+private/
+*.pdf
+*.aac
+*.m4b

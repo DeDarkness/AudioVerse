@@ -30,9 +30,14 @@ export class AudioPlayer extends EventTarget {
     });
     for (const event of ['play','pause','ratechange','seeked','ended']) audio.addEventListener(event, () => {
       if (this.book && this.pendingPosition === null) this.book.position = audio.currentTime;
-      if (event === 'ended' && this.book) this.book.finished = true;
+      if (event === 'ended' && this.book) {
+        this.book.finished = true;
+        this.book.readStatus = 'read';
+        patchBook(this.book.id,{readStatus:'read'}).catch(()=>this.fail('Não foi possível salvar a conclusão deste áudio.'));
+      }
       if (event === 'play') this.checkSleep();
       this.save(); this.updateSession(); this.emit();
+      if(event==='ended')this.dispatchEvent(new Event('ended'));
     });
     audio.addEventListener('error', () => {
       if (audio.error) { audio.pause(); this.fail('Não foi possível reproduzir este formato. Experimente um arquivo MP3 ou M4A válido.'); this.emit(); }
@@ -49,8 +54,13 @@ export class AudioPlayer extends EventTarget {
     this.loading = true; this.emit();
     const token = ++this.token;
     try {
-      const blob = await getAudio(book.id);
-      if (!blob) throw new Error('O arquivo não foi encontrado neste aparelho. Importe-o novamente.');
+      let source;
+      let blob;
+      if (navigator.serviceWorker?.controller) source = new URL(`./_audio/${encodeURIComponent(book.id)}`,import.meta.url).href;
+      else {
+        blob = await getAudio(book.id);
+        if (!blob) throw new Error('O arquivo não foi encontrado neste aparelho. Importe-o novamente.');
+      }
       if (token !== this.token) return;
       this.audio.pause(); await this.save();
       this.audio.removeAttribute('src'); this.audio.load();
@@ -59,8 +69,8 @@ export class AudioPlayer extends EventTarget {
       const restart = book.finished && autoplay;
       this.pendingPosition = restart ? 0 : book.position;
       if (restart) { this.book.finished = false; this.book.position = 0; }
-      this.url = URL.createObjectURL(blob);
-      this.audio.src = this.url;
+      this.url = blob ? URL.createObjectURL(blob) : null;
+      this.audio.src = source || this.url;
       this.audio.playbackRate = this.rate;
       localStorage.setItem('audioverse-last', book.id);
       this.setMetadata(); this.audio.load();
