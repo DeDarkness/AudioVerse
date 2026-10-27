@@ -26,6 +26,7 @@ test('catálogo Google aparece dentro do app e mantém marcadores ao atualizar',
 });
 
 test('configuração ausente é indicada sem fingir conexão com o Drive',async({page})=>{
+  await page.route('**/cloud-config.json',route=>route.fulfill({json:{clientId:''}}));
   await page.goto('/');await page.locator('#drive-connect').click();
   await expect(page.locator('#settings-view')).toBeVisible();await expect(page.locator('#google-setup')).toHaveAttribute('open','');
   await expect(page.locator('#toast')).toContainText('precisa do identificador Google');

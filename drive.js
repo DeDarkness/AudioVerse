@@ -11,7 +11,7 @@ function loadSDK() {
   return sdk;
 }
 export class DriveLibrary {
-  constructor({clientId='',folderName='MP3 compactados - Acervo completo',fetcher=globalThis.fetch.bind(globalThis)}={}) {
+  constructor({clientId='',folderName='MP3 verificados - Acervo completo',fetcher=globalThis.fetch.bind(globalThis)}={}) {
     this.clientId=clientId;this.folderName=folderName;this.fetcher=fetcher;
     this.token=null;this.expiresAt=0;this.authorizing=false;
   }

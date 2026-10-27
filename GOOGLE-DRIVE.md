@@ -1,6 +1,6 @@
 # Conexão privada do Google Drive
 
-A versão 1.2 prepara a conexão, mas precisa de um **Client ID OAuth Web do próprio AudioVerse**. O login do conector Google Drive no Codex não autoriza automaticamente o aplicativo publicado. Nenhum token do conector é copiado para o app.
+A versão publicada usa um **Client ID OAuth Web do próprio AudioVerse**, configurado em `cloud-config.json`. Cada usuário ainda precisa autorizar a conexão em sua conta Google. O login do conector Google Drive no Codex não autoriza automaticamente o aplicativo publicado. Nenhum token do conector é copiado para o app.
 
 ## Configuração inicial, na conta do proprietário
 
@@ -11,7 +11,7 @@ A versão 1.2 prepara a conexão, mas precisa de um **Client ID OAuth Web do pr�
 5. Em **Clientes**, crie um cliente OAuth do tipo **Aplicativo da Web**. Cadastre a origem JavaScript exata **https://dedarkness.github.io**, sem `/AudioVerse/`. O fluxo de token por popup não usa uma URI de redirecionamento própria.
 6. Copie somente o **Client ID**, terminado em `.apps.googleusercontent.com`. Não envie senha, client secret, access token ou refresh token.
 7. Para configurar o site em todos os aparelhos, preencha `clientId` em `cloud-config.json` e publique. Esse identificador é público. Como alternativa de preparação, é possível salvá-lo em **Ajustes → Google Drive privado → Configuração inicial da conexão**, naquele navegador.
-8. No iPhone, abra o AudioVerse, toque em **Conectar Google Drive** e autorize a leitura na janela do Google. O app procura a pasta **MP3 compactados - Acervo completo** na conta conectada e suas subpastas.
+8. No iPhone, abra o AudioVerse, toque em **Conectar Google Drive** e autorize a leitura na janela do Google. O app procura a pasta **MP3 verificados - Acervo completo** na conta conectada e suas subpastas.
 
 ## Como a reprodução funciona
 
