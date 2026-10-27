@@ -31,7 +31,7 @@ Seu espaço para ouvir. PWA pessoal em português, com visual escuro e verde ins
 
 Formatos aceitos para importação: MP3, M4A, M4B, AAC, WAV, OGG e FLAC. Codecs e contêineres realmente reproduzíveis variam por navegador. M4B é tratado como um arquivo de áudio; capítulos e capas embutidos não são extraídos automaticamente. MP3 é uma escolha prática para compatibilidade.
 
-O aplicativo não sintetiza narração de PDFs, não contém audiolivros e não inclui o Leviatã citado na conversa de origem. Importar um arquivo não verifica a integralidade do conteúdo narrado.
+O aplicativo não sintetiza narração de PDFs e não distribui audiolivros no site público. Importar um arquivo não verifica a integralidade do conteúdo narrado.
 
 ## Tela bloqueada e segundo plano
 
@@ -57,7 +57,7 @@ Se o iOS limitar esses comportamentos, um app nativo com sessão de áudio de pl
 
 O navegador pode remover armazenamento local. O pedido de persistência pode ser negado, especialmente no iOS. Mantenha os arquivos originais. O backup JSON contém somente títulos, autores, posições, favoritos e marcadores. Para restaurar em outro aparelho, importe os mesmos arquivos e depois o JSON; a correspondência usa nome, tamanho e data de modificação. Arquivos alterados ou recriados podem não corresponder.
 
-Não há login, sincronização entre aparelhos, servidor de áudios, analytics ou fontes externas. O código é público no GitHub Pages; áudios e backups não são enviados pelo aplicativo ao repositório.
+Arquivos locais funcionam sem login. A conexão opcional ao Google Drive usa OAuth de leitura e precisa de configuração própria, descrita em [GOOGLE-DRIVE.md](GOOGLE-DRIVE.md). O catálogo aparece dentro do AudioVerse; o MP3 escolhido é preparado em blocos no aparelho antes de tocar e pode ser ouvido offline depois. Tokens Google ficam somente na memória. Não há sincronização de progresso entre aparelhos nem analytics. O código é público no GitHub Pages; áudios e backups não são enviados pelo aplicativo ao repositório.
 
 ## Desenvolvimento
 
@@ -90,6 +90,6 @@ Referências: [Media Session API](https://developer.mozilla.org/en-US/docs/Web/A
 
 ## Conversão pessoal de PDFs no Windows
 
-Os scripts `scripts/prepare_audiobooks.py` e `scripts/synthesize_audiobook.ps1` permitem preparar narração local com uma voz portuguesa instalada no Windows e FFmpeg. `scripts/package_audiobooks.py` reúne blocos inteiros em volumes menores que 100 MiB para envio privado e importação no celular. A sequência de todos os blocos é conferida, sem cortar uma narração no meio para dividir o arquivo. Os PDFs, textos extraídos, configurações pessoais, relatórios e MP3s devem permanecer em `private/`, ignorado pelo Git e excluído do build publicado. O aplicativo web não acessa automaticamente o Google Drive: importe os MP3s pessoais pelo seletor de arquivos do aparelho.
+Os scripts `scripts/prepare_audiobooks.py` e `scripts/synthesize_audiobook.ps1` permitem preparar narração local com uma voz portuguesa instalada no Windows e FFmpeg. `scripts/package_audiobooks.py` reúne blocos inteiros em volumes menores que 100 MiB para envio privado e importação no celular. A sequência de todos os blocos é conferida, sem cortar uma narração no meio para dividir o arquivo. Os PDFs, textos extraídos, configurações pessoais, relatórios e MP3s devem permanecer em `private/`, ignorado pelo Git e excluído do build publicado. Os MP3s podem ser importados pelo seletor de arquivos ou preparados dentro do app pela conexão privada Google Drive, após configurar o OAuth.
 
 A preparação extrai todas as páginas, divide o texto sem truncar parágrafos e registra hashes dos blocos. Páginas com imagem e pouco texto bloqueiam a síntese até receberem OCR ou transcrição conferida. A síntese verifica cada bloco e decodifica o MP3 final por inteiro. Essa checagem confirma a integridade técnica; pronúncia, erros já presentes no OCR de origem e pequenos textos ilegíveis exigem revisão humana. Não publique obras protegidas ou documentos privados junto com o site.

@@ -1,10 +1,20 @@
-import { listBooks, addBook, patchBook, deleteBook, getAudio, restoreProgress, cleanupAbandonedImports } from './db.js';
+import { listBooks, addBook, patchBook, deleteBook, getAudio, restoreProgress, cleanupAbandonedImports, addDriveBooks, cacheDriveAudio, removeDriveCache } from './db.js';
+import { DriveLibrary } from './drive.js';
 import { AudioPlayer } from './player.js';
 import { time, size, escapeHTML as e, progress, filterBooks, isRead } from './utils.js';
 
 const $ = selector => document.querySelector(selector);
 const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const player = new AudioPlayer();
+const drive=new DriveLibrary({clientId:localStorage.getItem('audioverse-google-client')||''});
+let preparingCloud=false;
+$('#drive-connect').disabled=true;
+// Cloud setup must not delay local file-input listeners or offline library startup.
+const cloudReady=fetch('./cloud-config.json').then(r=>r.ok?r.json():{}).then(async config=>{
+  drive.clientId=localStorage.getItem('audioverse-google-client')||config.clientId||'';
+  if(config.folderName)drive.folderName=config.folderName;
+  await drive.warm().catch(()=>{});
+}).catch(()=>{}).finally(()=>{$('#drive-connect').disabled=false;renderDrive();});
 let books = [], view = 'library', filter = 'all', toastTimeout, deleteId = null, installPrompt = null;
 const palette = ['sage','copper','violet','blue','rose','sand'];
 const theme = book => palette[Array.from(book.id).reduce((n,c) => n+c.charCodeAt(0),0) % palette.length];
@@ -33,7 +43,7 @@ function render() {
   $('#page-title').innerHTML = `${view === 'favorites' ? 'Seus favoritos' : 'Sua biblioteca'}<span class="accent">.</span>`;
   $('#page-subtitle').textContent = view === 'favorites' ? 'As histórias que você quer ter sempre por perto.' : 'Boas histórias merecem acompanhar você.';
   $('#collection-title').firstChild.textContent = view === 'favorites' ? 'Áudios favoritos ' : 'Todos os áudios ';
-  renderHero(); renderLibrary(); renderPlayer();
+  renderHero(); renderLibrary(); renderPlayer(); renderDrive();
 }
 function renderLibrary() {
   const visible = visibleBooks();
@@ -50,6 +60,7 @@ function renderLibrary() {
   for (const card of list.querySelectorAll('[data-book]')) {
     const book = books.find(b=>b.id===card.dataset.book);
     card.querySelector('.book-bottom > span').outerHTML = readButton(book);
+    if(book.driveId)card.querySelector('.offline-badge').innerHTML=book.offline?`${icon('check')} Drive · No aparelho`:`${icon('download')} No seu Drive`;
   }
 }
 function readButton(book) {
@@ -97,6 +108,10 @@ function openDetails(id) {
   const current = player.book?.id === id ? player.book : book;
   $('#details-content').innerHTML = `<div class="dialog-heading"><span class="eyebrow">SEU ÁUDIO</span><button class="icon-button" data-close aria-label="Fechar">${icon('close')}</button></div><div class="details-intro">${cover(book)}<div><h2>${e(book.title)}</h2><p>${e(book.filename)}</p><span class="local-pill">${size(book.bytes)} · NO APARELHO</span></div></div><form id="edit-book" data-id="${e(id)}"><label>Título<input name="title" required maxlength="300" value="${e(book.title)}"></label><label>Autor / descrição<input name="author" required maxlength="200" value="${e(book.author)}"></label><button class="secondary" type="submit">Salvar informações</button></form><div class="details-actions"><button class="primary" data-listen="${e(id)}">${icon('play')}Ouvir áudio</button><button class="secondary" data-download="${e(id)}">${icon('download')}Salvar original</button></div><h3>Marcadores <span class="muted">${book.bookmarks.length}</span></h3><div class="bookmark-list">${book.bookmarks.length ? book.bookmarks.map(m => `<div class="bookmark-row"><button class="text-button" data-mark="${e(m.id)}" data-id="${e(id)}">${icon('bookmark')}<span>${e(m.label)}<small>${time(m.position)}</small></span></button><button class="icon-button" data-remove-mark="${e(m.id)}" data-id="${e(id)}" aria-label="Remover marcador ${e(m.label)}">${icon('close')}</button></div>`).join('') : '<p class="muted">Durante a reprodução, toque no ícone de marcador para guardar um trecho.</p>'}</div><div class="details-footer"><span>Posição salva: ${time(current.position)}</span><button class="text-button danger-text" data-delete="${e(id)}">Remover da biblioteca</button></div>`;
   $('#details-content .details-actions').insertAdjacentHTML('beforeend',readButton(book));
+  if(book.driveId){
+    $('#details-content .local-pill').textContent=`${size(book.bytes)} · ${book.offline?'DRIVE · NO APARELHO':'NO SEU DRIVE'}`;
+    if(book.offline)$('#details-content .details-actions').insertAdjacentHTML('beforeend',`<button class="text-button" data-release-cache="${e(book.id)}">Liberar espaço no aparelho</button>`);
+  }
   if (!$('#details').open) $('#details').showModal();
 }
 function download(blob, filename) {
@@ -121,6 +136,38 @@ async function importFiles(files) {
     if (added && navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
   } finally { $('#import-status').hidden = true; $('#files').value = ''; document.querySelectorAll('.import-button').forEach(b => { b.disabled = false; }); }
 }
+function renderDrive(){
+  const count=books.filter(b=>b.driveId).length;
+  $('#drive-status').textContent=drive.connected?`Conta conectada · ${count} áudio(s) no catálogo` : count?`${count} áudio(s) no catálogo · Conecte para preparar novos áudios` : 'Seu acervo privado, dentro do AudioVerse.';
+  $('#drive-connect').textContent=drive.configured?(drive.connected?'Atualizar acervo':'Conectar Google Drive'):'Preparar conexão Google';
+  $('#drive-disconnect').hidden=!drive.connected;
+  $('#google-client-id').value=drive.clientId;
+}
+async function listen(book,allowConnect=true){
+  if(preparingCloud)throw Error('Aguarde o preparo do áudio atual.');
+  if(book.driveId&&!book.offline){
+    if(!drive.connected){if(!allowConnect)throw Error('Conecte o Google Drive para preparar a próxima parte.');await drive.connect();}
+    preparingCloud=true;$('#import-status').hidden=false;
+    try{
+      $('#import-status').textContent='Preparando áudio do Drive · '+book.title;
+      await cacheDriveAudio(book,await drive.media(book.driveId),ratio=>{$('#import-status').textContent=`Preparando no aparelho · ${Math.round(ratio*100)}% · ${book.title}`;});
+      await refresh();book=books.find(b=>b.id===book.id);
+    }finally{preparingCloud=false;$('#import-status').hidden=true;}
+  }
+  await player.select(book,true);
+}
+$('#drive-connect').addEventListener('click',run(async()=>{
+  await cloudReady;
+  if(!drive.configured){switchView('settings');$('#google-setup').open=true;$('#google-client-id').focus();toast('A conexão privada precisa do identificador Google do AudioVerse.');return;}
+  await drive.connect();renderDrive();$('#drive-connect').disabled=true;
+  try{const files=await drive.catalog();const added=await addDriveBooks(files);await refresh();toast(`${files.length} áudio(s) no acervo do Drive. ${added} novo(s).`);}finally{$('#drive-connect').disabled=false;renderDrive();}
+}));
+$('#drive-disconnect').addEventListener('click',()=>{drive.disconnect();renderDrive();toast('Conta desconectada neste aparelho. Seus áudios offline e seu progresso foram mantidos.');});
+$('#save-google-client').addEventListener('click',run(async()=>{
+  const value=$('#google-client-id').value.trim();const candidate=new DriveLibrary({clientId:value});
+  if(!candidate.configured)throw Error('Informe o Client ID de aplicativo Web fornecido pelo Google.');
+  drive.disconnect();drive.clientId=value;localStorage.setItem('audioverse-google-client',value);await drive.warm();renderDrive();toast('Configuração salva. Toque em Conectar Google Drive.');
+}));
 
 document.addEventListener('click',run(async event => {
   const b = event.target.closest('button');
@@ -130,7 +177,7 @@ document.addEventListener('click',run(async event => {
   if (b.dataset.filter) { filter = b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b)); renderLibrary(); }
   if (b.dataset.listen) {
     const book = books.find(x=>x.id===b.dataset.listen);
-    if (book) { if ($('#details').open) $('#details').close(); await player.select(book,true); }
+    if (book) { if ($('#details').open) $('#details').close(); await listen(book); }
   }
   if (b.dataset.details) openDetails(b.dataset.details);
   if (b.dataset.favorite) {
@@ -149,11 +196,15 @@ document.addEventListener('click',run(async event => {
     }
   }
   if (b.hasAttribute('data-close')) b.closest('dialog').close();
-  if (b.dataset.delete) { deleteId = b.dataset.delete; $('#confirm-dialog').showModal(); }
-  if (b.dataset.download) { const book = books.find(x=>x.id===b.dataset.download); const blob = await getAudio(book.id); if (blob) download(blob,book.filename); else throw new Error('Arquivo não encontrado.'); }
+  if (b.dataset.delete) { deleteId = b.dataset.delete; $('#confirm-dialog p').textContent=books.find(x=>x.id===deleteId)?.driveId?'A entrada do catálogo, a cópia offline, o progresso e os marcadores serão removidos deste navegador. O original no Drive será mantido.':'O arquivo, o progresso e os marcadores serão removidos deste navegador.';$('#confirm-dialog').showModal(); }
+  if (b.dataset.download) { let book = books.find(x=>x.id===b.dataset.download); if(book.driveId&&!book.offline){await listen(book);book=books.find(x=>x.id===book.id);} const blob = await getAudio(book.id); if (blob) download(blob,book.filename); else throw new Error('Arquivo não encontrado.'); }
+  if(b.dataset.releaseCache){
+    const id=b.dataset.releaseCache;if(player.book?.id===id)await player.clear();
+    await removeDriveCache(id);await refresh();openDetails(id);toast('Cópia offline removida. O áudio continua no Drive e seu progresso foi mantido.');
+  }
   if (b.dataset.mark) {
     const book = books.find(x=>x.id===b.dataset.id), mark = book.bookmarks.find(x=>x.id===b.dataset.mark);
-    if (player.book?.id !== book.id) await player.select({...book,position:mark.position,finished:false},true);
+    if (player.book?.id !== book.id) {await patchBook(book.id,{position:mark.position,finished:false});await listen({...book,position:mark.position,finished:false});}
     else { player.seek(mark.position); await player.play(); }
     $('#details').close();
   }
@@ -240,7 +291,7 @@ player.addEventListener('ended',run(async()=>{
   const book=player.book;
   if(!book?.seriesKey)return;
   const next=books.find(b=>b.seriesKey===book.seriesKey && b.partIndex===book.partIndex+1);
-  if(next)await player.select(next,true);
+  if(next)await listen(next,false);
 }));
 player.addEventListener('problem',event=>toast(event.detail));
 player.addEventListener('sleepended',()=>toast('Temporizador encerrado. Boa pausa.'));
@@ -248,7 +299,7 @@ setInterval(()=>{ player.checkSleep(); tick(); },1000);
 for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('click',event=>{ if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom) dialog.close(); } });
 await cleanupAbandonedImports().then(refresh).catch(error=>{ $('#book-list').innerHTML = '<div class="empty-state"><h3>Não foi possível abrir a biblioteca</h3><p>Confira se este navegador permite armazenar dados locais e recarregue a página.</p></div>'; toast(errorMessage(error)); });
 const last = books.find(b=>b.id===localStorage.getItem('audioverse-last'));
-if (last) await player.select(last);
+if (last&&(!last.driveId||last.offline)) await player.select(last);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').then(async registration=>{
     const ready = await navigator.serviceWorker.ready;

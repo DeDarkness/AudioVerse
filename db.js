@@ -93,6 +93,48 @@ export const patchBook = (id, patch) => transaction(['books'],'readwrite',(tx,do
   r.onsuccess = () => { if (!r.result) return; const book = {...r.result,...patch}; store.put(book); done(book); };
 });
 export const deleteBook = id => transaction(['books','audio'],'readwrite', tx => { tx.objectStore('books').delete(id); const audio=tx.objectStore('audio'); audio.delete(id); audio.delete(`pending:${id}`); audio.delete(chunkRange(id)); });
+export async function addDriveBooks(files) {
+  return transaction(['books'],'readwrite',(tx,done)=>{
+    const store=tx.objectStore('books');let added=0;done(0);
+    for(const file of files){
+      if(!/^[\w-]+$/.test(file.id)||!file.name?.toLowerCase().endsWith('.mp3')||!Number.isSafeInteger(Number(file.size))||Number(file.size)<=0)continue;
+      const id='drive:'+file.id,r=store.get(id);
+      r.onsuccess=()=>{
+        const current=r.result;
+        // A changed cloud file must not silently replace an offline copy with a different length.
+        if(current){store.put({...current,...(!current.offline?{filename:file.name,bytes:Number(file.size)}:{}),driveModifiedTime:file.modifiedTime});return;}
+        store.add({id,fingerprint:id,driveId:file.id,driveModifiedTime:file.modifiedTime,...filenameMetadata(file.name),filename:file.name,bytes:Number(file.size),type:'audio/mpeg',offline:false,addedAt:Date.now(),position:0,duration:0,favorite:false,finished:false,bookmarks:[]});done(++added);
+      };
+    }
+  });
+}
+export async function cacheDriveAudio(book,response,onProgress=()=>{}) {
+  if(!book.driveId||!response.ok||!response.body)throw Error('Áudio do Drive indisponível.');
+  const chunkSize=4*1024*1024,reader=response.body.getReader();
+  let buffer=new Uint8Array(chunkSize),used=0,index=0,total=0;
+  try{
+    await removeAudio(book.id);
+    await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`pending:${book.id}`,bookId:book.id,createdAt:Date.now()}));
+    while(true){
+      const {done,value}=await reader.read();if(done)break;
+      if(total+value.byteLength>book.bytes)throw Error('O arquivo no Drive mudou. Atualize o catálogo antes de ouvir.');
+      total+=value.byteLength;let offset=0;
+      while(offset<value.byteLength){
+        const count=Math.min(chunkSize-used,value.byteLength-offset);buffer.set(value.subarray(offset,offset+count),used);used+=count;offset+=count;
+        if(used===chunkSize){const data=buffer.buffer;await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`${book.id}:${index++}`,buffer:data}));buffer=new Uint8Array(chunkSize);used=0;}
+      }
+      onProgress(total/book.bytes);
+    }
+    if(total!==book.bytes)throw Error('O download ficou incompleto. Tente novamente.');
+    if(used){const data=buffer.buffer.slice(0,used);await transaction(['audio'],'readwrite',tx=>tx.objectStore('audio').put({id:`${book.id}:${index++}`,buffer:data}));}
+    await transaction(['audio','books'],'readwrite',tx=>{
+      const store=tx.objectStore('audio');store.put({id:book.id,type:'audio/mpeg',chunkCount:index});store.delete(`pending:${book.id}`);
+      const request=tx.objectStore('books').get(book.id);request.onsuccess=()=>{if(request.result)tx.objectStore('books').put({...request.result,offline:true});};
+    });
+  }catch(error){await reader.cancel().catch(()=>{});await removeAudio(book.id).catch(()=>{});throw error;}
+  finally{reader.releaseLock();}
+}
+export async function removeDriveCache(id) {await removeAudio(id);return patchBook(id,{offline:false});}
 export async function restoreProgress(data) {
   if (data?.format !== 'audioverse-progress' || data.version !== 1 || !Array.isArray(data.books) || data.books.length > 10000) throw new Error('Este arquivo não é um backup compatível do AudioVerse.');
   const incoming = new Map();

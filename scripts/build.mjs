@@ -5,6 +5,6 @@ const destination = path.join(root,'dist');
 if (path.dirname(destination) !== root || path.basename(destination) !== 'dist') throw Error('Destino de build inválido');
 await rm(destination,{recursive:true,force:true});
 await mkdir(destination,{recursive:true});
-for (const file of ['index.html','app.js','db.js','player.js','utils.js','styles.css','manifest.webmanifest','sw.js','icons','.nojekyll']) await cp(path.join(root,file),path.join(destination,file),{recursive:true});
+for (const file of ['index.html','app.js','db.js','player.js','utils.js','drive.js','cloud-config.json','styles.css','manifest.webmanifest','sw.js','icons','.nojekyll']) await cp(path.join(root,file),path.join(destination,file),{recursive:true});
 for (const icon of JSON.parse(await readFile(path.join(root,'manifest.webmanifest'),'utf8')).icons) await readFile(path.join(destination,icon.src));
 console.log('AudioVerse pronto em dist/ (somente código e ícones; nenhum áudio pessoal).');
