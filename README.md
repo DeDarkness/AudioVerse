@@ -9,8 +9,9 @@ Seu espaço para ouvir. PWA pessoal em português, com visual escuro e verde ins
 1. Abra o endereço no **Safari**.
 2. Toque em **Compartilhar → Adicionar à Tela de Início**.
 3. Abra pelo ícone AudioVerse.
-4. Toque em **Adicionar áudio** e escolha arquivos do app Arquivos.
-5. Espere terminar a importação, inicie a reprodução e depois bloqueie a tela.
+4. Para o acervo privado, abra **Ajustes → Google Drive privado**, conecte sua conta Google e carregue o catálogo. Também é possível usar **Adicionar áudio** para importar arquivos do app Arquivos.
+5. Escolha um título e espere o preparo do MP3 no aparelho antes de iniciar a reprodução.
+6. A posição é salva automaticamente. Os detalhes do áudio permitem criar marcadores e marcar como lido ou não lido.
 
 É necessário acessar uma vez com internet para preparar a interface offline. Os arquivos importados ficam no navegador/aplicativo em que a importação foi feita, naquele aparelho. Importar no Safari e depois abrir pelo ícone pode exigir nova importação, conforme o isolamento de armazenamento da versão do iOS.
 
@@ -90,6 +91,6 @@ Referências: [Media Session API](https://developer.mozilla.org/en-US/docs/Web/A
 
 ## Conversão pessoal de PDFs no Windows
 
-Os scripts `scripts/prepare_audiobooks.py` e `scripts/synthesize_audiobook.ps1` permitem preparar narração local com uma voz portuguesa instalada no Windows e FFmpeg. `scripts/package_audiobooks.py` reúne blocos inteiros em volumes menores que 100 MiB para envio privado e importação no celular. A sequência de todos os blocos é conferida, sem cortar uma narração no meio para dividir o arquivo. Os PDFs, textos extraídos, configurações pessoais, relatórios e MP3s devem permanecer em `private/`, ignorado pelo Git e excluído do build publicado. Os MP3s podem ser importados pelo seletor de arquivos ou preparados dentro do app pela conexão privada Google Drive, após configurar o OAuth.
+Os scripts `scripts/prepare_audiobooks.py` e `scripts/synthesize_audiobook.ps1` permitem preparar narração local com uma voz portuguesa instalada no Windows e FFmpeg. `scripts/package_audiobooks.py` reúne blocos inteiros em volumes menores que 100 MiB para envio privado e importação no celular. A sequência de todos os blocos é conferida, sem cortar uma narração no meio para dividir o arquivo. Arquivos pessoais e temporários de processamento ficam em `private/`, ignorado pelo Git e excluído do build publicado. Nesta entrega, o destino definitivo dos MP3s é o Google Drive privado; o GitHub hospeda o aplicativo. Remova PDFs e textos temporários após o processamento e os MP3s temporários depois de conferir a cópia enviada ao Drive. Os MP3s podem ser importados pelo seletor de arquivos ou preparados dentro do app pela conexão privada Google Drive, após configurar o OAuth.
 
 A preparação extrai todas as páginas, divide o texto sem truncar parágrafos e registra hashes dos blocos. Páginas com imagem e pouco texto bloqueiam a síntese até receberem OCR ou transcrição conferida. A síntese verifica cada bloco e decodifica o MP3 final por inteiro. Essa checagem confirma a integridade técnica; pronúncia, erros já presentes no OCR de origem e pequenos textos ilegíveis exigem revisão humana. Não publique obras protegidas ou documentos privados junto com o site.
