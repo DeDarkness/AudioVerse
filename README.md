@@ -9,9 +9,9 @@ Seu espaço para ouvir. PWA pessoal em português, com visual escuro e verde ins
 1. Abra o endereço no **Safari**.
 2. Toque em **Compartilhar → Adicionar à Tela de Início**.
 3. Abra pelo ícone AudioVerse.
-4. Para o acervo privado, abra **Ajustes → Google Drive privado**, conecte sua conta Google e carregue o catálogo. Também é possível usar **Adicionar áudio** para importar arquivos do app Arquivos.
+4. Para o acervo privado, toque em **Conectar Google Drive** na biblioteca e autorize sua conta Google para carregar o catálogo. Também é possível usar **Adicionar áudio** para importar arquivos do app Arquivos.
 5. Escolha um título e espere o preparo do MP3 no aparelho antes de iniciar a reprodução.
-6. A posição é salva automaticamente. Os detalhes do áudio permitem criar marcadores e marcar como lido ou não lido.
+6. A posição é salva automaticamente. Durante a reprodução, o ícone de marcador guarda um trecho; o botão **Lido/Não lido** na biblioteca altera o estado de leitura.
 
 É necessário acessar uma vez com internet para preparar a interface offline. Os arquivos importados ficam no navegador/aplicativo em que a importação foi feita, naquele aparelho. Importar no Safari e depois abrir pelo ícone pode exigir nova importação, conforme o isolamento de armazenamento da versão do iOS.
 
